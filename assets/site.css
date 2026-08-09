@@ -4,9 +4,17 @@
 :root {
   --bg:#fcfcfb; --paper:#fff; --fg:#1c1c1a; --muted:#71716a; --faint:#9a9a92;
   --line:#e6e5e0; --edge:#b9b8b0; --accent:#4f46c9; --accent-soft:#eeecfb;
+  /* the circles get their own hue, not the edge grey: a ring is a scale and an
+     edge is a claim, and one drawn in the other's ink reads as the other */
+  --ring:#8fb4d9; --ringlab:#5b83ac;
   --note:#f5f4ef; --note-line:#dedbd0;
-  --proved:#2e7d51; --ready:#a8751a; --blocked:#8b8b84; --drafted:#2563a8; --failing:#b1382b;
+  --proved:#2e7d51; --ready:#a8751a; --open:#8b8b84; --drafted:#2563a8; --failing:#b1382b;
+  --gapped:#8a5a2b;
   --confpos:#2e7d51; --confneg:#b1382b;
+  /* The confidence *fill* is a wash a reader looks through, so it is a brighter hue than
+     the ink the percentage is set in: at 73% the old `--confpos` slab came out near
+     rgb(102,160,128), dark enough to read as a status rather than as a tint. */
+  --conffillpos:#3fd18f; --conffillneg:#ff7a63;
   --shadow:0 1px 2px rgba(20,20,18,.05), 0 8px 24px rgba(20,20,18,.06);
   --shadow-lift:0 2px 6px rgba(20,20,18,.07), 0 18px 48px rgba(20,20,18,.13);
   --r:10px; --ease:cubic-bezier(.22,.61,.36,1);
@@ -14,9 +22,15 @@
 :root[data-theme="dark"] {
   --bg:#15171a; --paper:#1c1f23; --fg:#e8e8e4; --muted:#9b9b94; --faint:#7c7c76;
   --line:#2c3035; --edge:#3a3f45; --accent:#a49bf5; --accent-soft:#262338;
+  --ring:#41607f; --ringlab:#7ea3c6;
   --note:#1e2227; --note-line:#363c44;
-  --proved:#5cb87f; --ready:#d7a447; --blocked:#7e837f; --drafted:#5fa0da; --failing:#e2705d;
+  --proved:#5cb87f; --ready:#d7a447; --open:#7e837f; --drafted:#5fa0da; --failing:#e2705d;
+  --gapped:#c8925a;
   --confpos:#5cb87f; --confneg:#e2705d;
+  /* Dark keeps the ink hue as its fill: against a dark paper a *brighter* wash is the
+     one thing that would fight the card's own light text, so the light theme is where
+     the brightening lands. Raise these two if the dark cards ever read as slabs too. */
+  --conffillpos:#5cb87f; --conffillneg:#e2705d;
   --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
   --shadow-lift:0 2px 6px rgba(0,0,0,.4), 0 18px 48px rgba(0,0,0,.5);
 }
@@ -29,7 +43,13 @@ a:hover { text-decoration:underline; }
 code { font:.87em/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
   background:var(--accent-soft); color:inherit; padding:1px 5px; border-radius:5px; }
 .katex { font-size:1.03em; }
-.katex-display { margin:.6em 0; overflow-x:auto; overflow-y:hidden; padding:3px 0; }
+/* A display is a beat in the argument, not a line of the paragraph. At .6em it sat
+   closer to the sentence under it than two sentences sit to each other, so the equation
+   read as part of the prose rather than as the assertion it is; and a wide one still has
+   to scroll inside its own box rather than push the page sideways. */
+.katex-display { margin:1.15em 0; overflow-x:auto; overflow-y:hidden;
+  padding:6px 0 8px; }
+details .katex-display { margin:.95em 0; }
 
 /* ── top bar ────────────────────────────────────────────────────────────── */
 .bar { display:flex; align-items:center; gap:14px; padding:0 18px; height:52px;
@@ -42,10 +62,32 @@ code { font:.87em/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
   transition:background .18s var(--ease), color .18s var(--ease), border-color .18s var(--ease); }
 .ghost:hover { background:var(--accent-soft); color:var(--accent); border-color:var(--accent);
   text-decoration:none; }
+/* the way home is labelled, not a glyph to hover over */
+.ghost.wide { width:auto; padding:0 10px; gap:5px; font-size:12px; font-weight:600;
+  letter-spacing:-.01em; white-space:nowrap; }
+@media (max-width:640px) { .ghost.wide { font-size:0; width:30px; padding:0; }
+  .ghost.wide::first-letter { font-size:14px; } }
+/* .ghost sets display, which beats the UA rule for [hidden]; ← back is hidden until
+   the script finds a history to go back to, and a dead control is worse than none. */
+.ghost[hidden] { display:none; }
 .crumbs { display:flex; align-items:center; gap:7px; font-size:13px; color:var(--muted);
   flex:1; flex-wrap:wrap; }
 .crumbs i { color:var(--faint); font-style:normal; }
 .crumbs span:last-child { color:var(--fg); font-weight:500; }
+
+/* One graph, one pill per question: a jump to that question's card, or — from a node
+   page, which draws its own question only — a link to the root graph, which draws them
+   all. Only rendered when the blueprint has more than one question. */
+.qswitch { display:flex; align-items:center; gap:4px; flex:0 0 auto; }
+.qswitch:empty { display:none; }
+.qpill { font-size:12px; font-weight:600; letter-spacing:-.01em; line-height:1;
+  padding:6px 10px; border-radius:7px; border:1px solid var(--line); color:var(--muted);
+  background:transparent; font-family:inherit; cursor:pointer;
+  transition:background .18s var(--ease), color .18s var(--ease), border-color .18s var(--ease); }
+.qpill:hover { background:var(--accent-soft); color:var(--accent);
+  border-color:var(--accent); text-decoration:none; }
+.qpill.on { background:var(--accent-soft); color:var(--accent); border-color:var(--accent); }
+.qpill.out::after { content:" ↗"; opacity:.55; }
 
 /* ── prose pages ─────────────────────────────────────────────────────────── */
 .prose { max-width:760px; margin:0 auto; padding:38px 24px 120px; }
@@ -64,6 +106,13 @@ code { font:.87em/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
 .prose blockquote > :last-child { margin-bottom:0; }
 .prose blockquote code { background:var(--bg); }
 .prose blockquote table { background:var(--paper); }
+/* The claim the page exists to make. Quieter than a blockquote — this is the main text,
+   not an aside — but ruled off, so a reader landing on a node sees what it asserts before
+   the prose around it. */
+.keybox { margin:1.3em 0; padding:4px 20px 16px; border:1px solid var(--edge);
+  border-radius:var(--r); background:var(--paper); }
+.keybox > h2, .keybox > h3, .keybox > h4 { margin:14px 0 6px; letter-spacing:.02em; }
+.keybox > :last-child { margin-bottom:0; }
 .prose hr { border:0; border-top:1px solid var(--line); margin:30px 0; }
 .prose table { border-collapse:collapse; margin:1em 0; font-size:14px; display:block;
   overflow-x:auto; }
@@ -96,8 +145,8 @@ ul.tight li { margin:3px 0; }
 .math[data-display="1"] { display:block; }
 
 /* ── status colours ──────────────────────────────────────────────────────── */
-.proved { --c:var(--proved); } .ready { --c:var(--ready); } .blocked { --c:var(--blocked); }
-.drafted { --c:var(--drafted); } .failing { --c:var(--failing); } .question { --c:var(--accent); }
+.proved { --c:var(--proved); } .ready { --c:var(--ready); } .open { --c:var(--open); }
+.drafted { --c:var(--drafted); } .failing { --c:var(--failing); } .gapped { --c:var(--gapped); } .question { --c:var(--accent); }
 /* The confidence bar: green filling right for evidence for, red for evidence against,
    empty for a claim nobody has weighed (ADR 0014). It sits on a prose page wherever a
    card would carry the fill on the graph. */
@@ -113,8 +162,29 @@ ul.tight li { margin:3px 0; }
    every other corroboration mark; a node page embeds the root graph in an iframe,
    whose chrome is hidden because the page around it already has its own. */
 .node.ea { --w:210px; z-index:5; }
+/* The z axis (ADR 0061). A card above level 0 is the same card, marked and never
+   redrawn: a dashed outline, and an opacity tied to how far the planes have been pulled
+   apart, so a level arrives with the tilt instead of snapping into existence. The rule
+   and its caption say the plane is a layer; the dashed accent connector says which
+   statement below it is the special case. */
+.node.zl { opacity:calc(.12 + .88 * var(--zfade, 0)); z-index:7; }
+.node.zl .card { border-style:dashed; border-left-style:solid;
+  box-shadow:0 14px 30px -16px rgba(0,0,0,.45); }
+.edge.zlink { stroke:var(--accent); stroke-width:1.4px; stroke-dasharray:2 5;
+  fill:none; opacity:.6; }
+.zrule { stroke:var(--edge); stroke-width:1px; stroke-dasharray:1 7;
+  fill:none; opacity:.4; }
+.zcap { fill:var(--faint); letter-spacing:.09em; text-transform:uppercase;
+  font:600 12px/1 ui-sans-serif, system-ui, sans-serif; }
+#ztilt.on { color:var(--accent); background:var(--accent-soft); }
 .node.ea .card { border-style:dashed; border-left-style:solid; }
-.node.ea.open { --w:340px; }
+/* A node the key-example register carries as a case where the answer IS known: the one
+   thing on the canvas that is settled, so it is marked and not tinted — yellow here is
+   the priority panel's yellow, "most valuable", and means the same thing. */
+.node.key .card { box-shadow:0 0 0 2px #87781f inset; }
+.ckey, .pkey { font:600 10px/1.5 ui-monospace,Menlo,monospace; letter-spacing:.04em;
+  padding:0 5px; border-radius:3px; background:#87781f; color:#fff; }
+.node.ea.opened { --w:340px; }
 .eachip { position:absolute; top:50%; z-index:6;
   border:1px dashed var(--edge); background:var(--paper); color:var(--muted);
   font:600 10.5px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
@@ -134,6 +204,30 @@ ul.tight li { margin:3px 0; }
 .edge.ea { stroke-dasharray:5 4; }
 .easw { width:9px; height:9px; border-radius:3px; display:inline-block;
   border:1.5px dashed var(--edge); background:transparent; }
+/* ── /why panels ─────────────────────────────────────────────────────────────
+   Above the statement, because they answer what a reader wants before it: not
+   what is wrong with this node but why it is here. Closed by default — an
+   explanation that pushes the claim off the screen has cost more than it
+   bought — and every panel says in its own footer that nothing may cite it. */
+.whys { margin:.2rem 0 1.2rem; display:grid; gap:.5rem; }
+details.why { border:1px solid var(--line); border-radius:var(--r);
+  background:var(--paper); }
+details.why[open] { border-color:var(--accent); }
+details.why > summary { cursor:pointer; list-style:none; padding:.6rem .85rem;
+  font-size:.86rem; line-height:1.45; color:var(--fg); display:flex; gap:.55rem;
+  align-items:baseline; }
+details.why > summary::-webkit-details-marker { display:none; }
+details.why > summary::after { content:"▸"; margin-left:auto; color:var(--faint);
+  font-size:.8rem; flex:none; }
+details.why[open] > summary::after { content:"▾"; color:var(--accent); }
+details.why > summary:hover { color:var(--accent); }
+.whytag { font-size:.63rem; letter-spacing:.09em; text-transform:uppercase;
+  font-weight:600; color:var(--accent); border:1px solid var(--accent);
+  border-radius:4px; padding:.12rem .3rem; flex:none; }
+.whybody { padding:0 .95rem; border-top:1px solid var(--line); }
+.whybody > :first-child { margin-top:.7rem; }
+.whyfoot { padding:.1rem .95rem .7rem; font-size:.72rem; color:var(--faint); }
+
 .dagembed { margin:1.1rem 0 1.8rem; }
 .dagembed iframe { display:block; width:100%; height:480px; border:1px solid var(--line);
   border-radius:var(--r); background:var(--bg); }
@@ -144,13 +238,48 @@ body.graph.embedded #stage { height:100vh; }
 
 /* ── graph page ──────────────────────────────────────────────────────────── */
 body.graph { overflow:hidden; }
-.dagbar #legend { display:flex; gap:14px; font-size:12.5px; color:var(--muted); flex-wrap:wrap; }
-.key { display:flex; align-items:center; gap:5px; }
-.key i { width:9px; height:9px; border-radius:3px; background:var(--c); display:inline-block; }
+
+/* ── the operators menu ─────────────────────────────────────────────────────
+   Left corner of the graph bar. One button, one panel; the legend and the
+   filters live inside it rather than on the bar. */
+.menu { position:relative; flex:none; }
+.menupanel { position:absolute; top:calc(100% + 7px); left:0; z-index:60;
+  width:min(30rem, calc(100vw - 2rem)); max-height:calc(100vh - 84px); overflow:auto;
+  padding:14px 16px 16px; background:var(--paper); border:1px solid var(--line);
+  border-radius:var(--r); box-shadow:0 10px 34px -10px rgba(0,0,0,.32);
+  font-size:12.5px; line-height:1.45; }
+.menupanel[hidden] { display:none; }
+.menupanel h4 { margin:14px 0 7px; font-size:10.5px; font-weight:700; letter-spacing:.09em;
+  text-transform:uppercase; color:var(--faint); display:flex; gap:9px; align-items:baseline;
+  flex-wrap:wrap; }
+.menupanel h4:first-child { margin-top:0; }
+.menupanel h4 span { font-size:10.5px; font-weight:400; letter-spacing:0;
+  text-transform:none; color:var(--faint); opacity:.85; }
+ul.ops { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+ul.ops li { display:grid; gap:1px; }
+ul.ops code { font-size:12px; font-weight:600; color:var(--c); }
+ul.ops i { font-style:normal; color:var(--faint); font-size:11.5px; }
+ul.ops a { text-decoration:none; }
+ul.ops a:hover code { text-decoration:underline; }
+ul.ops span { color:var(--muted); }
+ul.ops.gates code { font-weight:500; color:var(--muted); }
+/* The pages section (ADR 0091). Its rows are the site's destinations rather than
+   commands, so the link text is prose and not <code> — which is why it needs its own
+   rule: `ul.ops a:hover code` underlines a child that these rows do not have, and
+   without this they would render as unstyled text that happens to be clickable. Denser
+   than the operators above them, because there are seventeen and they are a list. */
+ul.ops.dests { gap:5px; }
+ul.ops.dests a { font-weight:600; color:var(--c); }
+ul.ops.dests a:hover { text-decoration:underline; }
+
+#legend { display:flex; flex-direction:column; gap:6px; color:var(--muted); }
+.key { display:flex; align-items:center; gap:6px; }
+.key i { width:9px; height:9px; border-radius:3px; background:var(--c); display:inline-block;
+  flex:none; }
 .key.conf i { background:color-mix(in srgb, var(--chue, var(--paper)) var(--conf, 0%),
     var(--paper));
   box-shadow:inset 0 0 0 1px var(--edge); }
-#filters { display:flex; gap:11px; font-size:12.5px; color:var(--muted); }
+#filters { display:flex; flex-wrap:wrap; gap:10px; color:var(--muted); }
 #filters label { display:flex; align-items:center; gap:4px; cursor:pointer; user-select:none;
   transition:color .18s var(--ease); }
 #filters label:hover { color:var(--c); }
@@ -161,11 +290,53 @@ body.graph { overflow:hidden; }
 #canvas.dragging { cursor:grabbing; }
 #svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
 #layer { position:absolute; inset:0; transform-origin:0 0; }
+/* A fold: a one-line claim, then its justification behind a disclosure triangle. The
+   summary has to look like a control and not like a heading, or a reader takes the claim
+   for the whole of what is there — which is the failure mode the fold exists to fix in
+   the other direction. */
+details { margin:.5em 0 1.1em; }
+details > summary { cursor:pointer; list-style:none; display:inline-flex; gap:.4em;
+  align-items:baseline; font-size:12.5px; letter-spacing:.02em; color:var(--muted);
+  border:1px dashed var(--line); border-radius:999px; padding:1px 11px;
+  user-select:none; }
+details > summary::-webkit-details-marker { display:none; }
+details > summary::before { content:"\25B8"; font-size:10px; }
+details[open] > summary::before { content:"\25BE"; }
+details > summary:hover { color:var(--accent); border-color:var(--accent); }
+details[open] > summary { margin-bottom:.55em; }
+details > *:not(summary) { margin-left:14px; padding-left:12px;
+  border-left:2px solid var(--line); }
+
+/* the rings (ADR 0089): the scale distance is read against. Dashed and light on
+   purpose — a solid circle at card weight reads as an object in the graph, and the one
+   thing it must never be mistaken for is a boundary something is inside or outside. */
+.ring { fill:none; stroke:var(--ring); stroke-width:1.4px; stroke-dasharray:9 10;
+  opacity:.75; }
+/* Every circle also lays down a wash, so the tint deepens step by step toward the middle.
+   Dashed outlines alone stop reading as layers at the zoom where the whole scale fits —
+   they read as five circles — and the accumulating tint is what says the same thing the
+   radius says: the closer in, the more of the argument turns on it. */
+.ringfill { fill:var(--ring); stroke:none; opacity:.05; }
+.ringlab { fill:var(--ringlab); font-size:13px; font-weight:600; letter-spacing:.03em;
+  paint-order:stroke; stroke:var(--paper); stroke-width:4px; stroke-linejoin:round; }
 .edge { stroke:var(--edge); stroke-width:1.7px; fill:none;
   transition:stroke .2s var(--ease), opacity .2s var(--ease); }
 .edge.hot { stroke:var(--accent); stroke-width:2.2px; }
+.qfeedlab { fill:var(--accent); font-size:12px; font-weight:600;
+  paint-order:stroke; stroke:var(--bg); stroke-width:4px; stroke-linejoin:round; }
+.qnode.door { cursor:pointer; }
+.qnode.door .card { transition:transform .12s ease, box-shadow .12s ease; }
+.qnode.door:hover .card { transform:translateY(-2px); }
+/* question feeds question (ADR 0039) — heavier than a lemma edge and never dashed,
+   because it relates two arguments and not two claims */
+.edge.qfeed { stroke:var(--accent); stroke-width:3px; opacity:.62; }
+.edge.qfeed.hot { opacity:1; stroke-width:3.6px; }
 
-.node { position:absolute; width:var(--w, 244px); transform:translate(-50%, -50%);
+/* Width is the larger of the state width (--w: base, branch, opened) and the node's own
+   importance width (--wbase, set inline from base x (1 + I), ADR 0058) — so a card that
+   carries the argument is visibly bigger, and opening one never shrinks it. */
+.node { position:absolute; --w:244px; width:max(var(--w), var(--wbase, 0px));
+  transform:translate(-50%, -50%);
   transition:left .34s var(--ease), top .34s var(--ease), width .34s var(--ease),
              opacity .22s var(--ease), filter .22s var(--ease); }
 .node.gone { display:none; }
@@ -180,9 +351,9 @@ body.graph { overflow:hidden; }
   border-radius:var(--r); box-shadow:var(--shadow); cursor:pointer; overflow:hidden;
   transition:box-shadow .28s var(--ease), border-color .28s var(--ease),
              transform .28s var(--ease); }
-.node:not(.open) .card:hover { transform:translateY(-2px); box-shadow:var(--shadow-lift); }
-.node.open { --w:412px; z-index:40; }
-.node.open .card { box-shadow:var(--shadow-lift); border-color:var(--c); }
+.node:not(.opened) .card:hover { transform:translateY(-2px); box-shadow:var(--shadow-lift); }
+.node.opened { --w:412px; z-index:40; }
+.node.opened .card { box-shadow:var(--shadow-lift); border-color:var(--c); }
 .chead { display:flex; align-items:center; justify-content:space-between; gap:10px;
   padding:9px 13px 0; }
 .cid { font-weight:650; font-size:13.5px; letter-spacing:-.01em; }
@@ -196,13 +367,25 @@ body.graph { overflow:hidden; }
 .cmeta .cpct.neg { color:var(--confneg); }
 .cmeta .cupd { color:var(--ready); border:1px solid color-mix(in srgb, var(--ready) 45%, transparent);
   border-radius:99px; padding:0 6px; font-weight:600; letter-spacing:.02em; }
+.cmeta .cchg { color:var(--failing); border:1px solid color-mix(in srgb, var(--failing) 55%, transparent);
+  border-radius:99px; padding:0 6px; font-weight:600; letter-spacing:.02em; }
 .pupd { color:var(--ready); font-weight:600; }
+/* the needs-update elaboration (ADR 0055): the chip says what is wrong, this says
+   what is happening and links the record that says it. */
+.pupdbox { border-left:3px solid var(--ready); background:var(--paper);
+  padding:.55rem .7rem; margin:.6rem 0 .2rem; border-radius:0 4px 4px 0;
+  font-size:.92em; line-height:1.5; }
+.pupdbox b { color:var(--ready); }
+.pupdbox a { white-space:nowrap; }
+.updlong { display:block; margin-top:.25rem; opacity:.85; }
+.updrec { display:inline-block; margin-top:.2rem; }
+.pchg { color:var(--failing); font-weight:700; }
 .qnode { --c:var(--accent); }
 .qnode .cttl { color:var(--fg); font-size:13.5px; }
 .qnode .card { border-left-width:3px; }
 .cbody { max-height:0; opacity:0; overflow:hidden;
   transition:max-height .34s var(--ease), opacity .22s var(--ease); }
-.node.open .cbody { max-height:420px; opacity:1; overflow-y:auto; }
+.node.opened .cbody { max-height:420px; opacity:1; overflow-y:auto; }
 .cinner { padding:0 13px 12px; border-top:1px solid var(--line); }
 .ckind { font-size:11.5px; color:var(--faint); padding:8px 0 2px; }
 .ccore { font-size:13px; }
@@ -223,9 +406,20 @@ body.graph { overflow:hidden; }
 body.started #hint { opacity:0; }
 
 /* ── side panel ──────────────────────────────────────────────────────────── */
-#aside { width:400px; flex:0 0 400px; border-left:1px solid var(--line); background:var(--paper);
-  overflow-y:auto; position:relative;
+/* --pw is the reader's: the grip on the left edge writes it and it persists. A question's
+   framing is the longest prose on the site, and 400px was a guess about how much of it
+   anyone wants beside the graph. */
+#aside { width:var(--pw, 400px); flex:0 0 var(--pw, 400px); border-left:1px solid var(--line);
+  background:var(--paper); overflow-y:auto; position:relative;
   transition:flex-basis .32s var(--ease), width .32s var(--ease), opacity .2s var(--ease); }
+#pgrip { position:absolute; left:-3px; top:0; width:9px; height:100%; z-index:3;
+  cursor:col-resize; touch-action:none; }
+#pgrip::after { content:""; position:absolute; left:3px; top:0; width:3px; height:100%;
+  background:transparent; transition:background .18s var(--ease); }
+#pgrip:hover::after, body.resizing #pgrip::after { background:var(--accent); }
+body.resizing { cursor:col-resize; user-select:none; }
+body.resizing #aside, body.resizing #layer { transition:none; }
+body.nopanel #pgrip { display:none; }
 #panel { padding:20px 22px 80px; }
 #ptoggle { position:absolute; top:12px; right:12px; z-index:2; width:26px; height:26px;
   border:1px solid var(--line); background:var(--paper); color:var(--muted); border-radius:7px;
@@ -243,6 +437,31 @@ body.nopanel #reopen { display:block; }
 #panel h3 { font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--faint);
   margin:22px 0 6px; font-weight:600; }
 #panel p { margin:.55em 0; }
+/* The confidence decomposition (ADR 0042): one row per channel, each carrying what it
+   scored, what that contributes, and where to go and read the record it scored. */
+.cdec { width:100%; border-collapse:collapse; margin:6px 0 4px; font-size:12.5px; }
+.cdec th { text-align:left; font-weight:600; padding:5px 0; white-space:nowrap;
+  vertical-align:baseline; }
+.cdec td { padding:5px 0; vertical-align:baseline; }
+.cdec .cdw { color:var(--faint); font-weight:400; margin-left:5px; font-size:11px; }
+.cdec .cdv { width:100%; padding-left:10px; color:var(--muted);
+  font-variant-numeric:tabular-nums; }
+.cdec .cdv .cbar { display:inline-block; width:52px; height:7px; border-radius:4px;
+  border:1px solid var(--line); vertical-align:middle; margin-right:7px; }
+.cdec .cdsays { color:var(--fg); margin-right:7px; }
+.cdec .cdt { text-align:right; padding-left:12px; white-space:nowrap; font-weight:600;
+  font-variant-numeric:tabular-nums; }
+.cdec .cdn td { padding:0 0 9px; color:var(--muted); font-size:11.5px; line-height:1.5;
+  border-bottom:1px solid var(--line); }
+.cdec .cdn b { color:var(--fg); }
+.cdec .cddig { display:block; margin-top:3px; }
+.cdec .cddig a { color:var(--accent); }
+.cdec .cdnone { color:var(--faint); font-style:italic; }
+.cdec .cdsum th, .cdec .cdsum td { padding-top:9px; font-size:13.5px; }
+.cdec .cdsum .cbar { width:100%; min-width:52px; }
+.cdcap, .cdfoot { font-size:11.5px; color:var(--faint); line-height:1.55; margin:6px 0 0; }
+h3 .ch3, h2 .ch3 { float:right; font-weight:650; font-variant-numeric:tabular-nums; }
+
 .nodelist { list-style:none; padding:0; margin:8px 0 0; display:grid; gap:6px; }
 .nodelist a { display:block; border:1px solid var(--line); border-radius:9px; padding:8px 11px;
   color:var(--fg); font-size:12.5px; line-height:1.45;
@@ -252,32 +471,15 @@ body.nopanel #reopen { display:block; }
 .nodelist b { font-size:13px; margin-right:7px; }
 .nodelist span:last-child { color:var(--muted); }
 
+h4.qsec { font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--faint);
+  margin:20px 0 4px; font-weight:600; }
+
 @media (max-width:900px) {
   body.graph { overflow:auto; }
   #stage { flex-direction:column; height:auto; }
   #canvas { height:66vh; }
   #aside { width:auto; flex:none; border-left:0; border-top:1px solid var(--line); }
+  #pgrip { display:none; }
   body.nopanel #aside { height:0; }
 }
-/* ── priority panel (ADR 0020) ───────────────────────────────────────────── */
-.prio { float:right; width:340px; margin:4px 0 22px 30px; border:1px solid var(--line);
-  border-radius:12px; padding:16px 18px 13px; background:var(--paper);
-  box-shadow:var(--shadow); font-size:12.5px; line-height:1.55; }
-.prio h2 { font-size:15px; margin:0 0 9px; letter-spacing:-.01em; }
-.prio h3 { font-size:11px; text-transform:uppercase; letter-spacing:.07em;
-  color:var(--faint); margin:15px 0 6px; font-weight:600; }
-.prio .pempty { color:var(--faint); margin:.3em 0; }
-.plist { list-style:none; padding:0; margin:0; display:grid; gap:8px; }
-.plist a { font-weight:600; }
-.pby { display:block; color:var(--faint); font-size:11px; }
-.sev { display:inline-block; font-size:9.5px; font-weight:700; text-transform:uppercase;
-  letter-spacing:.06em; border-radius:5px; padding:1.5px 6px; margin-right:7px;
-  vertical-align:1.5px; color:#fff; }
-.sev.red { background:var(--confneg); }
-.sev.amber { background:#a8752c; }
-.sev.yellow { background:#87781f; }
-.sev.info { background:var(--muted); }
-#panel .prio { float:none; width:auto; margin:16px 0 4px; box-shadow:none; }
-@media (max-width:900px) { .prio { float:none; width:auto; margin:0 0 18px; } }
-
 @media (prefers-reduced-motion: reduce) { * { transition:none !important; } }

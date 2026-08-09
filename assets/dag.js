@@ -11,28 +11,35 @@
    node they illustrate in a branch that stays collapsed until its chip is clicked —
    examples to the right, analogies to the left — and an open branch draws its own
    dashed dependency edges into the spine, so it reads as the sub-DAG it is, not a
-   list. Effective status (`ready`, `blocked`) is computed once, in Python, and arrives
-   as n.eff; nothing derives it twice. */
+   list. Effective status (`ready`) is computed once, in Python, and arrives as n.eff;
+   nothing derives it twice. There is no `blocked` (ADR 0045). */
 (function (root) {
   'use strict';
 
   function mount(DATA) {
     const N = {};
     DATA.nodes.forEach((n) => { N[n.id] = n; });
-    const S = DATA.scope;
-    const SID = '__scope';
-    const STATUSES = ['proved', 'drafted', 'failing', 'ready', 'blocked'];
+    /* One card per question, side by side (ADR 0039). A node carries n.q, the id of its
+       question's card, and n.qi, its block index; everything that used to reach for "the"
+       scope now asks which one. DATA.scopes is never empty — a blueprint with no question
+       still gets one placeholder card — so SC[0] is always a card. */
+    const SC = DATA.scopes || [];
+    const SBY = {};
+    SC.forEach((s) => { SBY[s.id] = s; });
+    const isQ = (id) => Object.prototype.hasOwnProperty.call(SBY, id);
+    const scopeOf = (n) => SBY[n.q] || SC[0];
+    const STATUSES = ['proved', 'drafted', 'failing', 'gapped', 'ready', 'open'];
     const md = (s, o) => BP.render(s || '', o || {});
     const esc = BP.esc;
     const $ = (id) => document.getElementById(id);
 
     const NS = 'http://www.w3.org/2000/svg';
-    const canvas = $('canvas'), svg = $('svg'), elayer = $('edges');
-    const layer = $('layer'), panel = $('panel');
+    const canvas = $('canvas'), svg = $('svg'), elayer = $('edges'), rlayer = $('rings');
+    const layer = $('layer'), panel = $('panel'), aside = $('aside');
     const CARD = 244, HEAD = 80, QW = 430, QH = 84, QY = -215;
     /* side-branch card width/height, and how far the neighbouring spine columns give
        way when a branch opens — sized so a stack clears even a half-column neighbour */
-    const EAW = 210, EAH = 74, EA_DX = 400;
+    const EAW = 210, EAH = 74;
 
     /* Embedded on a node page (an <iframe>): the chrome belongs to the page around it,
        links must escape the frame, and nothing persists preferences from inside. */
@@ -63,42 +70,107 @@
     const chips = {};
 
     const hidden = new Set();
-    const shown = (n) => (n.ea ? expanded.has(gkey(n.ea.host, n.ea.side))
+
+    /* ───────── the z axis: abstraction level (ADR 0061) ─────────
+       A node's level is the number of `-z` segments in its id, derived from the id
+       exactly as its x/y depth is derived from the `-L` chain. Level 0 is the graph as
+       it has always been drawn, and at rest that is all there is: the planes above are
+       not dimmed and not folded, they are absent. An axis a reader never asks for cannot
+       clutter the one they came for.
+
+       The drawing is 2.5D, not 3D. Each level is laid out in its own plane by the same
+       2D pass and only the planes are stacked; the projection is oblique, so cards stay
+       upright and axis-aligned at every angle. Full 3D node-link drawings on a flat
+       screen buy depth with occlusion and rotated text — the two things that make a
+       graph unreadable — and an oblique stack of upright planes pays neither. `pitch`
+       pulls the planes apart, `yaw` supplies the parallax that says which plane is
+       which, and the base plane is left almost undistorted (a cavalier projection: the
+       .22 is a token foreshortening, enough to read as a tilt, small enough that the
+       252px row pitch never collapses into itself). */
+    const ZGAP = 320;
+    let pitch = 0, yaw = 0;                        // radians; (0, 0) is the flat view
+    const sep = () => Math.sin(pitch);             // 0 at rest, 1 fully separated
+    const lvl = (n) => n.z || 0;
+    const ZMAX = Math.max(0, ...DATA.nodes.map(lvl));
+    const PYv = (y, z) => y * (1 - .22 * sep()) - z * ZGAP * sep();
+    const PX = (n) => effX(n) + lvl(n) * ZGAP * Math.sin(yaw);
+    const PY = (n) => PYv(n.y, lvl(n));
+
+    const shown = (n) => (lvl(n) && sep() < .02 ? false
+                        : n.ea ? expanded.has(gkey(n.ea.host, n.ea.side))
                                : !hidden.has(n.eff));
     const G = {};
 
     /* ───────── effective positions ─────────
-       An open branch would overdraw the next spine column, so the columns give way:
-       every spine node right of an opened right-branch's column shifts by EA_DX,
-       mirrored for left branches — one shift per column, however many of its rows
-       hold open branches. The scope card and its question-level branches never move. */
-    let colsR = new Set(), colsL = new Set();
-    function recount() {
-      colsR = new Set(); colsL = new Set();
-      expanded.forEach((k) => {
-        const cut = k.lastIndexOf('|');
-        const h = k.slice(0, cut), side = k.slice(cut + 1);
-        if (h === SID || !N[h]) return;
-        (side === 'r' ? colsR : colsL).add(N[h].x);
-      });
-    }
-    function dx(x) {
-      let d = 0;
-      colsR.forEach((c) => { if (c < x - 1) d += EA_DX; });
-      colsL.forEach((c) => { if (c > x + 1) d -= EA_DX; });
-      return d;
-    }
+       Opening a chip moves nothing (ADR 0089), so a position is the position Python
+       computed and these are the identity.
+
+       They were not. A branch used to be a card in the lane between two spine columns,
+       so every column past it slid EA_DX aside to make the room, and the blocks of the
+       other questions slid with them. On circles there are no columns — every card has
+       its own x — so "every column past this one" is half the graph, and a chip would
+       have turned the rings inside out. The room a branch needs is reserved instead: it
+       is placed in the gap between two circles, where nothing on a circle can be, and it
+       is placed whether or not the chip is open, so a reader who opens one is not made
+       to re-read the diagram. `recount()` kept its other job and lost this one. */
+    function recount() {}
+    function qIndex(sid) { for (let i = 0; i < SC.length; i++) if (SC[i].id === sid) return i; return 0; }
+    function blockDx() { return 0; }
+    function dx() { return 0; }
     function effX(n) {
-      if (n.ea) return n.x + (n.ea.host !== SID && N[n.ea.host] ? dx(N[n.ea.host].x) : 0);
-      return n.x + dx(n.x);
+      const qi = n.qi || 0;
+      if (n.ea) {
+        const h = N[n.ea.host];
+        return n.x + (h ? dx(h.x, h.qi || 0) : blockDx(qi));
+      }
+      return n.x + dx(n.x, qi);
     }
+    function scopeX(s) { return s.x + blockDx(qIndex(s.id)); }
 
     /* ───────── header ───────── */
     $('crumbs').innerHTML = DATA.crumbs.map(
       (c) => (c[1] ? `<a href="${esc(c[1])}">${esc(c[0])}</a>`
                    : `<span>${esc(c[0])}</span>`)).join('<i>›</i>');
-    $('hub').href = DATA.hub;
+    $('appendix').href = DATA.appendix;
     $('home').href = DATA.home;
+    /* dag.html is the front door, so on dag.html itself the ⌂ DAG control is a link to
+       the page it is already on. A nav anchor that goes nowhere teaches the reader that
+       the bar is decoration, so it comes off rather than sitting there greyed: the crumb
+       trail on the left already says "the DAG", unlinked, which is the honest form.
+       The flag is server-side rather than a comparison against `location`, which the
+       smoke harness's DOM does not have — and which would have made the check depend on
+       how the page was opened rather than on which page it is. */
+    if (DATA.athome) $('home').hidden = true;
+    /* The operators menu. It holds what moves the blueprint, then the legend and the
+       filters, which are consulted rarely and were costing the bar its whole middle.
+       Closes on escape and on a click outside, like every other menu a reader has met. */
+    (function opsmenu() {
+      const b = $('opsbtn'), p = $('opspanel');
+      if (!b || !p) return;
+      const show = (on) => { p.hidden = !on; b.setAttribute('aria-expanded', on); };
+      b.addEventListener('click', (e) => { e.stopPropagation(); show(p.hidden); });
+      p.addEventListener('click', (e) => e.stopPropagation());
+      document.addEventListener('click', () => show(false));
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !p.hidden) { show(false); b.focus(); }
+      });
+    })();
+    /* One graph, one pill per question. A question drawn on this page is a jump to its
+       card; one that is not — a node page draws only its own — is a link to the root
+       graph, which draws them all. */
+    if (DATA.switch) {
+      $('qswitch').innerHTML = DATA.switch.map(
+        (q) => (q[2] ? `<button class="qpill" data-q="${esc(q[3])}">${esc(q[0])}</button>`
+                     : `<a class="qpill out" href="${esc(q[1])}">${esc(q[0])}</a>`)).join('');
+      $('qswitch').querySelectorAll('[data-q]').forEach((b) =>
+        b.addEventListener('click', () => open(b.dataset.q)));
+    }
+    function markPills() {
+      if (!DATA.switch) return;
+      $('qswitch').querySelectorAll('[data-q]').forEach((b) =>
+        b.classList.toggle('on', b.dataset.q === (sel && isQ(sel) ? sel
+                                : (sel && N[sel] ? N[sel].q : ''))));
+    }
 
     /* ───────── cards ───────── */
     /* The face of a card — visible without opening it — carries the three per-node
@@ -112,12 +184,14 @@
           ${n.created ? `<span title="added">${esc(n.created)}</span>` : ''}
           <span class="cpct ${sign}" title="confidence ${esc(n.cnote)}">${esc(n.cpct)}</span>
           ${n.upd ? `<span class="cupd" title="${esc(n.upd)}">needs update</span>` : ''}
+          ${n.chg ? `<span class="cchg" title="${esc(n.chg)}">needs change</span>` : ''}
         </div>`;
     }
     function cardHTML(n) {
       return `<div class="card">
         <div class="chead">
           <span class="cid">${esc(n.id)}</span>
+          ${n.key ? `<span class="ckey" title="a case where the answer is known — ${esc(n.key)} in the key-example register">${esc(n.key)}</span>` : ''}
           <span class="cst ${n.eff}">${n.eff}</span>
         </div>
         <div class="cttl">${md(n.title).replace(/^<p>|<\/p>$/g, '')}</div>
@@ -136,7 +210,8 @@
 
     DATA.nodes.forEach((n) => {
       const d = document.createElement('div');
-      d.className = 'node' + (n.ea ? ' ea' : '');
+      d.className = 'node' + (n.ea ? ' ea' : '') + (n.key ? ' key' : '')
+                  + (n.z ? ' zl' : '');
       d.dataset.id = n.id;
       d.style.left = n.x + 'px';
       d.style.top = n.y + 'px';
@@ -144,6 +219,10 @@
          evidence for, red for evidence against, no fill at all at zero (ADR 0014) */
       d.style.setProperty('--conf', n.ctint);
       d.style.setProperty('--chue', n.chue);
+      /* the width says how much of the argument rests on it (ADR 0058) — a different
+         question from the fill, and never applied to a branch card, whose 210px is what
+         its lane beside the host is measured with */
+      if (!n.ea && n.impw) d.style.setProperty('--wbase', n.impw + 'px');
       d.innerHTML = cardHTML(n);
       d.addEventListener('click', (e) => { e.stopPropagation(); toggle(n.id); });
       d.addEventListener('mouseenter', () => { if (!sel) highlight(n.id); });
@@ -152,28 +231,40 @@
       G[n.id] = d;
     });
 
-    const qd = document.createElement('div');
-    qd.className = 'node qnode';
-    qd.dataset.id = SID;
-    qd.style.left = '0px';
-    qd.style.top = QY + 'px';
-    qd.style.setProperty('--conf', S.ctint || '0%');
-    qd.style.setProperty('--chue', S.chue || 'var(--paper)');
-    qd.innerHTML = `<div class="card">
-      <div class="chead"><span class="cid">${esc(S.short)}</span>
-        <span class="cst ${S.kind === 'question' ? 'question' : (S.eff || 'question')}"
-          >${esc(S.kind === 'question' ? 'question' : S.eff)}</span></div>
-      <div class="cttl">${md(S.title).replace(/^<p>|<\/p>$/g, '')}</div>
-      <div class="cbody"><div class="cinner">
-        <div class="ckind">confidence ${esc(S.cnote || '—')}</div>
-        <div class="ccore">${md(S.body)}</div>
-        <div class="cfoot"><span>${DATA.total || DATA.nodes.length} nodes</span>
-          <a href="${esc(S.href)}">all pages →</a>
-        </div></div></div>
-    </div>`;
-    qd.addEventListener('click', (e) => { e.stopPropagation(); toggle(SID); });
-    layer.appendChild(qd);
-    G[SID] = qd;
+    SC.forEach((S) => {
+      const qd = document.createElement('div');
+      qd.className = 'node qnode';
+      qd.dataset.id = S.id;
+      qd.style.left = S.x + 'px';
+      qd.style.top = S.y + 'px';
+      qd.style.setProperty('--conf', S.ctint || '0%');
+      qd.style.setProperty('--chue', S.chue || 'var(--paper)');
+      qd.innerHTML = `<div class="card">
+        <div class="chead"><span class="cid">${esc(S.short)}</span>
+          <span class="cst ${S.kind === 'question' ? 'question' : (S.eff || 'question')}"
+            >${esc(S.kind === 'question' ? 'question' : S.eff)}</span></div>
+        <div class="cttl">${md(S.title).replace(/^<p>|<\/p>$/g, '')}</div>
+        <div class="cbody"><div class="cinner">
+          <div class="ckind">confidence ${esc(S.cnote || '—')}</div>
+          <div class="ccore">${md(S.body)}</div>
+          <div class="cfoot"><span>${S.nlabel || ((S.n || DATA.total || DATA.nodes.length) + ' nodes')}</span>
+            <a href="${esc(S.graph || S.href)}">${S.graph ? 'open its DAG \u2192'
+              : 'the question \u2192'}</a>
+          </div></div></div>
+      </div>`;
+      /* On the root page the questions are all that is drawn, so a card is a door and not
+         a panel toggle: clicking it goes to that question's own DAG (ADR 0082). */
+      if (S.graph) qd.classList.add('door');
+      qd.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (S.graph) { location.href = S.graph; return; }
+        toggle(S.id);
+      });
+      qd.addEventListener('mouseenter', () => { if (!sel) highlight(S.id); });
+      qd.addEventListener('mouseleave', () => { if (!sel) highlight(null); });
+      layer.appendChild(qd);
+      G[S.id] = qd;
+    });
 
     /* ───────── branch chips ─────────
        The host card carries one chip per branch — ▸ n examples on its right edge,
@@ -228,6 +319,40 @@
       return out;
     }
 
+    /* ───────── the circles ─────────
+       Distance from the centre is a level of the argument, so the level has to be
+       visible: without the circles a reader sees scattered cards and no scale, and the
+       one thing the layout is for stops being legible. They are drawn once — the radii
+       come from Python with the coordinates, so the circle a card was sized against is
+       the circle it is drawn on — and they sit behind everything, outside the tilt: a
+       ring is the plane the argument lies in and must not lean with it. */
+    function drawRings() {
+      if (!rlayer) return;
+      while (rlayer.firstChild) rlayer.removeChild(rlayer.firstChild);
+      const rings = DATA.rings || [], c = DATA.ringc || [0, 0];
+      /* the washes first, outermost inward, so each one lies over the last and the tint
+         accumulates toward the centre */
+      rings.slice().sort((a, b) => b.r - a.r).forEach((g) => {
+        const f = document.createElementNS(NS, 'circle');
+        f.setAttribute('cx', c[0]); f.setAttribute('cy', c[1]);
+        f.setAttribute('r', g.r); f.setAttribute('class', 'ringfill');
+        rlayer.appendChild(f);
+      });
+      rings.slice().sort((a, b) => b.r - a.r).forEach((g) => {
+        const k = document.createElementNS(NS, 'circle');
+        k.setAttribute('cx', c[0]); k.setAttribute('cy', c[1]);
+        k.setAttribute('r', g.r); k.setAttribute('class', 'ring');
+        rlayer.appendChild(k);
+        const t = document.createElementNS(NS, 'text');
+        /* on the circle's own line, at the bottom, where a card is least likely to be:
+           the sweep starts straight up, so the last wedge to fill is the one below */
+        t.setAttribute('x', c[0]); t.setAttribute('y', c[1] + g.r + 15);
+        t.setAttribute('class', 'ringlab'); t.setAttribute('text-anchor', 'middle');
+        t.textContent = g.label ? g.n + ' — ' + g.label : 'ring ' + g.n;
+        rlayer.appendChild(t);
+      });
+    }
+
     function renderEdges() {
       while (elayer.firstChild) elayer.removeChild(elayer.firstChild);
       const arc = (from, to, a, b, cls) => {
@@ -241,42 +366,129 @@
         p.dataset.a = a; p.dataset.b = b;
         elayer.appendChild(p);
       };
-      const box = (n) => ({x: effX(n), y: n.y, h: n.ea ? EAH : HEAD});
+      const box = (n) => ({x: PX(n), y: PY(n), h: n.ea ? EAH : HEAD});
+      const qbox = (s) => ({x: scopeX(s), y: PYv(s.y, 0), h: QH});
       SP.filter(shown).forEach((n) =>
         visibleDeps(n.id, new Set([n.id])).forEach((d) => arc(box(N[d]), box(n), n.id, d)));
-      SP.filter((n) => shown(n) && !n.reqby.some((r) => N[r] && inSpine.has(r) && shown(N[r])))
-        .forEach((n) => arc(box(n), {x: 0, y: QY, h: QH}, SID, n.id));
+      /* a top-row node rises to its OWN question's card, not to the first one */
+      SP.filter((n) => shown(n) && !lvl(n)
+                 && !n.reqby.some((r) => N[r] && inSpine.has(r) && shown(N[r])))
+        .forEach((n) => arc(box(n), qbox(scopeOf(n)), n.q, n.id));
+      /* question feeds question (ADR 0039, drawn on circles by 0088): a straight run
+         between the two cards, clipped at each card's own edge, thicker and in the
+         accent because it relates arguments and not lemmas.
+         It used to be a horizontal cubic with x0/x1 taken off the sign of dx, which was
+         right while the questions were tiled in a row and is meaningless once they sit
+         at an angle to one another: a feeder above its target drew an arrow that left
+         the wrong side of the card and crossed it. Clipping a segment against each box
+         works whatever the angle, and reduces to the old picture when the angle is 0. */
+      const clip = (from, to, hw, hh) => {
+        /* where the segment from -> to leaves an axis-aligned box of half-size hw,hh
+           centred on `from`; the box is the card, so the arrow starts at its border */
+        const dxx = to.x - from.x, dyy = to.y - from.y;
+        if (!dxx && !dyy) return {x: from.x, y: from.y};
+        const s_ = Math.min(Math.abs(dxx) > 1e-6 ? hw / Math.abs(dxx) : Infinity,
+                            Math.abs(dyy) > 1e-6 ? hh / Math.abs(dyy) : Infinity);
+        return {x: from.x + dxx * s_, y: from.y + dyy * s_};
+      };
+      SC.forEach((s) => (s.feeds || []).forEach((t) => {
+        if (!SBY[t]) return;
+        const a = qbox(s), b = qbox(SBY[t]);
+        const p0 = clip(a, b, QW / 2, QH / 2), p1 = clip(b, a, QW / 2 + 9, QH / 2 + 9);
+        const p = document.createElementNS(NS, 'path');
+        p.setAttribute('class', 'edge qfeed');
+        p.setAttribute('marker-end', 'url(#ar)');
+        p.setAttribute('d', `M${p0.x} ${p0.y} L${p1.x} ${p1.y}`);
+        p.dataset.a = t; p.dataset.b = s.id;
+        elayer.appendChild(p);
+        /* the node of the fed question the Feeds paragraph names: an arrow that says
+           where it lands, not only that it does */
+        const lab = (s.feedlabel || {})[t];
+        if (lab) {
+          const tx = document.createElementNS(NS, 'text');
+          tx.setAttribute('class', 'qfeedlab');
+          tx.setAttribute('x', (p0.x + p1.x) / 2);
+          tx.setAttribute('y', (p0.y + p1.y) / 2 - 7);
+          tx.setAttribute('text-anchor', 'middle');
+          tx.textContent = lab;
+          elayer.appendChild(tx);
+        }
+      }));
       /* an open branch: a dashed containment edge from its host — illustration, not
          dependency, so no arrowhead — plus each branch node's own depends-on edges,
          dashed with arrows, which is what makes the branch a sub-DAG rather than a
          list (ADR 0024) */
       EA.filter(shown).forEach((n) => {
-        const hostN = n.ea.host === SID ? null : N[n.ea.host];
-        const ex = effX(n);
-        if (n.ea.host === SID || (hostN && shown(hostN))) {
-          const hb = hostN ? {x: effX(hostN), y: hostN.y, hw: CARD / 2}
-                           : {x: 0, y: QY, hw: QW / 2};
+        const hostN = isQ(n.ea.host) ? null : N[n.ea.host];
+        const hostQ = isQ(n.ea.host) ? SBY[n.ea.host] : null;
+        const ex = PX(n);
+        if (hostQ || (hostN && shown(hostN))) {
+          const hb = hostN ? {x: PX(hostN), y: PY(hostN), hw: CARD / 2}
+                           : {x: scopeX(hostQ), y: PYv(hostQ.y, 0), hw: QW / 2};
           const sgn = n.ea.side === 'r' ? 1 : -1;
           const x0 = hb.x + sgn * hb.hw, x1 = ex - sgn * (EAW / 2);
           const p = document.createElementNS(NS, 'path');
           p.setAttribute('class', 'edge ea');
           p.setAttribute('d', `M${x0} ${hb.y} C${(x0 + x1) / 2} ${hb.y}, ` +
-                              `${(x0 + x1) / 2} ${n.y}, ${x1} ${n.y}`);
+                              `${(x0 + x1) / 2} ${PY(n)}, ${x1} ${PY(n)}`);
           p.dataset.a = n.ea.host; p.dataset.b = n.id;
           elayer.appendChild(p);
         }
         n.deps.forEach((d) => {
           if (N[d] && shown(N[d]))
-            arc({x: effX(N[d]), y: N[d].y, h: N[d].ea ? EAH : HEAD},
-                {x: ex, y: n.y, h: EAH}, n.id, d, 'edge ea');
+            arc({x: PX(N[d]), y: PY(N[d]), h: N[d].ea ? EAH : HEAD},
+                {x: ex, y: PY(n), h: EAH}, n.id, d, 'edge ea');
         });
       });
+
+      /* the z axis (ADR 0061): the plane rules first, then the specialization edges.
+         A rule is one dashed line across the plane's own extent with the level named at
+         its left end, which is what tells a reader that the cards floating above are a
+         layer and not a stray branch. Both are drawn only once the planes have parted,
+         so the flat graph is byte-for-byte the drawing it always was. */
+      if (sep() > .02) {
+        for (let z = 0; z <= ZMAX; z++) {
+          const on = DATA.nodes.filter((n) => shown(n) && lvl(n) === z);
+          if (!on.length) continue;
+          const xs = on.map(PX), ys = on.map(PY);
+          const x0 = Math.min(...xs) - 300, x1 = Math.max(...xs) + 190;
+          const y = Math.max(...ys) + 128;
+          const r = document.createElementNS(NS, 'path');
+          r.setAttribute('class', 'zrule');
+          r.setAttribute('d', `M${x0} ${y} L${x1} ${y}`);
+          elayer.appendChild(r);
+          const t = document.createElementNS(NS, 'text');
+          t.setAttribute('class', 'zcap');
+          t.setAttribute('x', x0); t.setAttribute('y', y - 12);
+          t.textContent = z === 0 ? 'z 0 · this problem'
+                                  : `z ${z} · the general statement`;
+          elayer.appendChild(t);
+        }
+        DATA.nodes.filter((n) => shown(n) && lvl(n)).forEach((n) => {
+          (n.instances || []).forEach((j) => {
+            if (!N[j] || !shown(N[j])) return;
+            const a = box(N[j]), b = box(n);
+            const p = document.createElementNS(NS, 'path');
+            p.setAttribute('class', 'edge zlink');
+            p.setAttribute('d', `M${a.x} ${a.y - a.h / 2} ` +
+                                `C${a.x} ${a.y - 120}, ${b.x} ${b.y + 120}, ` +
+                                `${b.x} ${b.y + b.h / 2}`);
+            p.dataset.a = n.id; p.dataset.b = j;
+            elayer.appendChild(p);
+          });
+        });
+      }
     }
 
     function applyPositions() {
       DATA.nodes.forEach((n) => {
-        G[n.id].style.left = effX(n) + 'px';
-        G[n.id].style.top = n.y + 'px';
+        G[n.id].style.left = PX(n) + 'px';
+        G[n.id].style.top = PY(n) + 'px';
+        if (lvl(n)) G[n.id].style.setProperty('--zfade', sep().toFixed(3));
+      });
+      SC.forEach((s) => {
+        G[s.id].style.left = scopeX(s) + 'px';
+        G[s.id].style.top = PYv(s.y, 0) + 'px';
       });
     }
 
@@ -285,7 +497,7 @@
       applyPositions();
       DATA.nodes.forEach((n) => G[n.id].classList.toggle('gone', !shown(n)));
       renderEdges();
-      if (sel && sel !== SID && !shown(N[sel])) close(); else highlight(sel);
+      if (sel && !isQ(sel) && !shown(N[sel])) close(); else highlight(sel);
     }
     const applyFilter = refresh;
 
@@ -301,9 +513,13 @@
       return out;
     }
     function highlight(id) {
-      const keep = !id ? null : id === SID
-        ? new Set([SID, ...DATA.nodes.map((n) => n.id)])
-        : new Set([id, SID, ...relatives(id, 'deps'), ...relatives(id, 'reqby'),
+      /* a card lights its own question and the questions it feeds; a node lights its
+         ancestry, its dependants, its branch host and its own branches */
+      const keep = !id ? null : isQ(id)
+        ? new Set([id, ...(SBY[id].feeds || []),
+                   ...DATA.nodes.filter((n) => n.q === id).map((n) => n.id)])
+        : new Set([id, N[id] ? N[id].q : '',
+                   ...relatives(id, 'deps'), ...relatives(id, 'reqby'),
                    ...(N[id] && N[id].ea ? [N[id].ea.host] : []),
                    ...EA.filter((x) => x.ea.host === id).map((x) => x.id)]);
       Object.keys(G).forEach((k) => G[k].classList.toggle('dim', !!keep && !keep.has(k)));
@@ -335,52 +551,81 @@
         const k = gkey(n.ea.host, n.ea.side);
         if (!expanded.has(k)) { expanded.add(k); label(k); refresh(); }
       }
-      if (sel && G[sel]) G[sel].classList.remove('open');
+      if (sel && G[sel]) G[sel].classList.remove('opened');
       sel = id;
-      G[id].classList.add('open');
+      G[id].classList.add('opened');
       document.body.classList.add('started');
       highlight(id);
-      id === SID ? scopePanel() : detail(id);
-      hash.set(id === SID ? '' : id);
+      isQ(id) ? scopePanel(SBY[id]) : detail(id);
+      hash.set(id);
+      markPills();
       if (collapsed && !quiet) setPanel(false);
       centre(id);
     }
     function close() {
-      if (sel && G[sel]) G[sel].classList.remove('open');
+      if (sel && G[sel]) G[sel].classList.remove('opened');
       sel = null;
       hash.set('');
       highlight(null);
+      markPills();
       overview();
     }
 
     /* ───────── the panel: strictly what the open node is ───────── */
-    function scopeHead() {
+    function scopeHead(S) {
       return `<div class="phead"><span class="ptag ${S.kind === 'question' ? 'question' : S.eff}"
           >${esc(S.kind === 'question' ? 'question' : S.eff)}</span>
         <h2>${md(S.title).replace(/^<p>|<\/p>$/g, '')}</h2></div>`;
     }
-    function scopeBody() {
-      return (S.problem ? `<h3>Problem statement</h3>${md(S.problem)}` : '') +
-             `<h3>${S.kind === 'question' ? 'Conjecture' : 'Decomposition'}</h3>${md(S.body)}` +
+    /* The two things a question is — what it asks and what it currently answers — are
+       boxed, as the same two are on every page that carries them. Feeds and Setting are
+       context and stay plain. */
+    const keybox = (h, b) => `<section class="keybox"><h3>${h}</h3>${b}</section>`;
+    function scopeBody(S) {
+      return (S.feedsnote ? `<h3>Feeds</h3>${md(S.feedsnote)}` : '') +
+             (S.problem ? keybox('Problem statement', md(S.problem)) : '') +
+             keybox('Conjecture', md(S.body)) +
              (S.setting ? `<h3>Setting</h3>${md(S.setting)}` : '') +
-             (S.statement ? `<h3>Statement</h3>${md(S.statement)}` : '');
+             (S.statement ? keybox('Statement', md(S.statement)) : '');
     }
+    /* Nothing open: the panel is a contents page over the nodes drawn on this canvas.
+
+       Two things used to sit above that list and are gone. A row per question repeated
+       the question cards the canvas already draws, in a worse form — a card carries its
+       tally and its confidence tint, a row carried neither — and the pipeline was a
+       pre-rendered copy of `pipeline.html`, which is its own destination in the menu.
+       Both pushed the one thing the panel is for, the node index, below the fold. */
     function overview() {
-      const rows = DATA.nodes.map((n) =>
+      const rows = (ids) => ids.map((n) =>
         `<li><a href="#" data-go="${n.id}"><b>${esc(n.id)}</b>
           <span class="cst ${n.eff}">${n.eff}</span><br><span>${
             md(n.title).replace(/^<p>|<\/p>$/g, '')}</span></a></li>`
       ).join('');
       const folded = (DATA.total || DATA.nodes.length) - DATA.nodes.length;
-      panel.innerHTML = scopeHead() + scopeBody() + (DATA.prio || '') +
-        `<h3>The ${DATA.nodes.length} nodes drawn here</h3>` +
+      let h;
+      if (SC.length > 1) {
+        h = `<div class="phead"><span class="ptag question">${SC.length} questions</span>
+            <h2>The blueprint</h2></div>`;
+      } else {
+        h = scopeHead(SC[0]) + scopeBody(SC[0]);
+      }
+      h += `<h3>The ${DATA.nodes.length} nodes drawn here</h3>` +
         (folded ? `<p class="foldnote">${folded} more sit in folded sub-lemma families —
-           a decomposed lemma draws its family on its own page.</p>` : '') +
-        `<ul class="nodelist">${rows}</ul>`;
+           a decomposed lemma draws its family on its own page.</p>` : '');
+      if (SC.length > 1) {
+        SC.forEach((s) => {
+          const mine = DATA.nodes.filter((n) => n.q === s.id);
+          if (mine.length) h += `<h4 class="qsec">${esc(s.short)}</h4>` +
+            `<ul class="nodelist">${rows(mine)}</ul>`;
+        });
+      } else {
+        h += `<ul class="nodelist">${rows(DATA.nodes)}</ul>`;
+      }
+      panel.innerHTML = h;
       wire();
     }
-    function scopePanel() {
-      panel.innerHTML = scopeHead() + scopeBody();
+    function scopePanel(S) {
+      panel.innerHTML = scopeHead(S) + scopeBody(S);
       wire();
     }
 
@@ -392,24 +637,38 @@
           <span class="ptag ${n.eff}">${n.eff}</span>
           <h2>${esc(n.id)} — ${md(n.title).replace(/^<p>|<\/p>$/g, '')}</h2>
           <p class="sub">${esc(n.type)}${n.role && n.role !== 'proof' ? ' · ' + esc(n.role) : ''}${n.created ? ' · added ' + esc(n.created) : ''}
-            · confidence ${esc(n.cnote)}${n.upd ? ' · <span class="pupd">needs update — ' + esc(n.upd) + '</span>' : ''}</p>
+            · confidence ${esc(n.cnote)}${n.key ? ' · <span class="pkey">key example ' + esc(n.key) + '</span>' : ''}${n.goal && n.goal !== '\u2014' ? ' · goal check ' + esc(n.goal) : ''}${n.upd ? ' · <span class="pupd">needs update — ' + esc(n.upd) + '</span>' : ''}${n.chg ? ' · <span class="pchg">needs change — ' + esc(n.chg) + '</span>' : ''}</p>
         </div>
-        <h3>Statement</h3>${md(n.statement)}`;
-      if (n.decomposition) h += `<h3>Decomposition</h3>${md(n.decomposition)}`;
-      if (n.history) h += `<h3>History</h3>${md(n.history)}`;
-      if (n.kids) h += `<h3>Sub-lemmas</h3><p>${n.kidsProved} of ${n.kids} proved — ` +
-        (n.fold ? `folded here; <a href="${esc(n.href)}">its own page</a> draws them.</p>`
-                : `drawn beneath it in this graph.</p>`);
-      h += `<h3>Dependencies</h3><ul class="tight">
-          <li>proved with: ${jump(n.deps)}</li>
-          <li>required by: ${jump(n.reqby)}</li></ul>`;
-      if (n.objects.length) h += '<h3>Objects it may invoke</h3><ul class="tight">' +
-        n.objects.map((o) => `<li><a href="${o.href}">${o.label.indexOf('$') < 0
-          ? '<code>' + esc(o.label) + '</code>'
-          : md(o.label).replace(/^<p>|<\/p>$/g, '')}</a></li>`).join('') + '</ul>';
+        ${keybox('Statement', md(n.statement))}`;
+      /* The needs-update chip in the sub-line says what is wrong in four words. This says
+         what is happening and links the record that says it (ADR 0055) — the chip alone
+         left the reader one search away from the file they needed. It sits above the box
+         and not inside it: the defect is about the statement, not part of it. */
+      if (n.upd && n.updLong) h = h.replace('<section class="keybox">',
+        `<div class="pupdbox"><b>Needs update — ${esc(n.upd)}.</b> ${md(n.updLong)
+          .replace(/^<p>|<\/p>$/g, '')}` +
+        (n.updHref ? ` <a href="${n.updHref}">${esc(n.updLabel)} \u2192</a>` : '') +
+        '</div><section class="keybox">');
+      /* Four sections and no more — ADR 0042's three, plus the one ADR 0058 added: what
+         the node claims, how well it is supported and why, how much of the argument rests
+         on it, and where to read further. The history is a page, not a panel section
+         (ADR 0037); dependencies, sub-lemmas and appendix objects are all somewhere to
+         go, so they are rows of Pages rather than headings of their own. */
+      h += `<h3>Confidence <span class="ch3">${esc(n.cpct)}</span></h3>${n.cdec}`;
+      h += `<h3>Importance <span class="ch3">${esc(n.imp)}%</span></h3>${n.idec}`;
       h += '<h3>Pages</h3><ul class="tight">' +
         n.pages.map((p) => `<li><a href="${p.href}">${esc(p.label)}</a>` +
-                           (p.note ? ` — ${esc(p.note)}` : '') + '</li>').join('') + '</ul>';
+                           (p.note ? ` — ${esc(p.note)}` : '') + '</li>').join('') +
+        `<li>rests on: ${jump(n.deps)}</li>
+         <li>required by: ${jump(n.reqby)}</li>` +
+        (n.kids ? `<li>sub-lemmas: ${n.kidsProved} of ${n.kids} proved` +
+           (n.fold ? `, folded here — <a href="${esc(n.href)}">its own page</a> draws them`
+                   : ', drawn beneath it in this graph') + '</li>' : '') +
+        (n.objects.length ? '<li>objects it may invoke: ' + n.objects.map((o) =>
+          `<a href="${o.href}">${o.label.indexOf('$') < 0
+            ? '<code>' + esc(o.label) + '</code>'
+            : md(o.label).replace(/^<p>|<\/p>$/g, '')}</a>`).join(', ') + '</li>' : '') +
+        '</ul>';
       panel.innerHTML = h;
       wire();
     }
@@ -432,6 +691,42 @@
     $('ptoggle').addEventListener('click', () => setPanel(true));
     $('reopen').addEventListener('click', () => setPanel(false));
 
+    /* ───────── a panel the reader sizes ─────────
+       A question's Setting, Problem statement and Conjecture are the longest prose the
+       site has, and 400px is a guess about how much of it a reader wants beside the
+       graph. Drag the grip on the panel's left edge to settle it; the width persists,
+       and a double-click puts it back. Clamped so neither the canvas nor the panel can
+       be dragged out of existence — the toggle is what hides the panel. */
+    const PW0 = 400, PWMIN = 300;
+    const pwmax = () => Math.max(PWMIN, Math.round(innerWidth * 0.72));
+    let sized = false;               // apply() needs `view`, which is set up further down
+    function setWidth(px, save) {
+      const w = Math.max(PWMIN, Math.min(pwmax(), Math.round(px)));
+      document.documentElement.style.setProperty('--pw', w + 'px');
+      if (save && !EMB) BP.pref('panelw', String(w));
+      if (sized) apply();
+    }
+    const savedW = EMB ? null : BP.pref('panelw');
+    if (savedW) setWidth(parseInt(savedW, 10) || PW0, false);
+    const grip = $('pgrip');
+    let gdrag = null;
+    grip.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      gdrag = {x: e.clientX, w: aside.getBoundingClientRect().width};
+      document.body.classList.add('resizing');
+      if (grip.setPointerCapture) grip.setPointerCapture(e.pointerId);
+    });
+    grip.addEventListener('pointermove', (e) => {
+      if (gdrag) setWidth(gdrag.w + (gdrag.x - e.clientX), false);
+    });
+    ['pointerup', 'pointercancel'].forEach((t) => grip.addEventListener(t, () => {
+      if (!gdrag) return;
+      gdrag = null;
+      document.body.classList.remove('resizing');
+      setWidth(aside.getBoundingClientRect().width, true);
+    }));
+    grip.addEventListener('dblclick', (e) => { e.stopPropagation(); setWidth(PW0, true); });
+
     /* ───────── legend and filters: the spine; branches are chip-governed ───────── */
     const tally = {};
     SP.forEach((n) => { tally[n.eff] = (tally[n.eff] || 0) + 1; });
@@ -442,10 +737,11 @@
       .map((s) => `<span class="key"><i class="${s}"></i>${tally[s]} ${s}</span>`).join('')
       + (EA.length ? `<span class="key" title="collapsed side branches — the ▸ / ◂ chips open them"
            ><i class="easw"></i>${nR} example${nR === 1 ? '' : 's'} · ${nL} analog${nL === 1 ? 'y' : 'ies'}</span>` : '')
-      + `<span class="key conf" title="green is evidence for, red is evidence against, and
-         an empty card is a claim nobody has weighed yet"><i style="--conf:${
-           esc(S.ctint || '0%')};--chue:${esc(S.chue || 'var(--paper)')}"></i>confidence ${
-           esc(S.cnote || '—')}</span>`;
+      + SC.map((s) => `<span class="key conf" title="green is evidence for, red is evidence
+           against, and an empty card is a claim nobody has weighed yet"><i style="--conf:${
+             esc(s.ctint || '0%')};--chue:${esc(s.chue || 'var(--paper)')}"></i>${
+             SC.length > 1 ? esc(s.short) + ' ' : 'confidence '}${
+             esc(s.cnote || '—')}</span>`).join('');
     $('filters').innerHTML = kinds
       .map((s) => `<label class="${s}"><input type="checkbox" data-s="${s}" checked>${s}</label>`)
       .join('');
@@ -459,19 +755,33 @@
     /* The opening view is the whole graph, not a guessed scale: a diagram whose bottom row
        is off-screen reads as a diagram with fewer nodes than it has. */
     function bounds() {
-      const xs = [-QW / 2, QW / 2], ys = [QY - QH / 2, QY + QH / 2];
-      DATA.nodes.filter(shown).forEach((n) => {
-        const x = effX(n), w = n.ea ? EAW : CARD, h = n.ea ? EAH : HEAD;
-        xs.push(x - w / 2, x + w / 2);
-        ys.push(n.y - h / 2, n.y + h / 2);
+      const xs = [], ys = [];
+      SC.forEach((s) => {
+        xs.push(scopeX(s) - QW / 2, scopeX(s) + QW / 2);
+        ys.push(PYv(s.y, 0) - QH / 2, PYv(s.y, 0) + QH / 2);
       });
+      DATA.nodes.filter(shown).forEach((n) => {
+        const x = PX(n), y = PY(n), w = n.ea ? EAW : CARD, h = n.ea ? EAH : HEAD;
+        xs.push(x - w / 2, x + w / 2);
+        ys.push(y - h / 2, y + h / 2);
+      });
+      const c = DATA.ringc || [0, 0];
+      const far = Math.max(0, ...(DATA.rings || []).map((g) => g.r));
+      if (far) {
+        xs.push(c[0] - far, c[0] + far);
+        ys.push(c[1] - far, c[1] + far + 22);   /* + the outermost ring's label */
+      }
       return {x0: Math.min(...xs), x1: Math.max(...xs),
               y0: Math.min(...ys), y1: Math.max(...ys)};
     }
     function fit() {
       const b = bounds(), r = canvas.getBoundingClientRect();
       const pad = 58;
-      const k = Math.min(1.05, Math.max(.7,
+      /* The floor is the wheel's own minimum, not a comfortable reading scale: with two
+         questions side by side (ADR 0039) a .7 floor showed one of them and cut the other
+         off the right edge, which reads as a graph with one question in it. Better to open
+         zoomed out on everything and let the reader zoom in, or take a pill. */
+      const k = Math.min(1.05, Math.max(.28,
         Math.min((r.width - pad * 2) / Math.max(1, b.x1 - b.x0),
                  (r.height - pad * 2) / Math.max(1, b.y1 - b.y0))));
       return {x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2, k};
@@ -482,11 +792,17 @@
       const dx_ = r.width / 2 - view.x * view.k, dy_ = r.height / 2 - view.y * view.k;
       layer.style.transform = `translate(${dx_}px, ${dy_}px) scale(${view.k})`;
       elayer.setAttribute('transform', `translate(${dx_},${dy_}) scale(${view.k})`);
+      if (rlayer) rlayer.setAttribute('transform',
+        `translate(${dx_},${dy_}) scale(${view.k})`);
     }
     function centre(id) {
-      const n = id === SID ? {x: 0, y: QY} : N[id];
+      if (isQ(id)) {
+        view.x = scopeX(SBY[id]); view.y = SBY[id].y + 40;
+        return apply();
+      }
+      const n = N[id];
       if (!n) return;
-      view.x = id === SID ? 0 : effX(n); view.y = n.y + 40;
+      view.x = PX(n); view.y = PY(n) + 40;
       apply();
     }
     canvas.addEventListener('wheel', (e) => {
@@ -496,12 +812,25 @@
     }, {passive: false});
     let drag = null, moved = false;
     canvas.addEventListener('pointerdown', (e) => {
-      drag = {x: e.clientX, y: e.clientY, vx: view.x, vy: view.y}; moved = false;
+      drag = {x: e.clientX, y: e.clientY, vx: view.x, vy: view.y,
+              p: pitch, w: yaw,
+              rot: ZMAX > 0 && (e.shiftKey || e.button === 2)};
+      moved = false;
       canvas.classList.add('dragging');
     });
+    canvas.addEventListener('contextmenu', (e) => { if (ZMAX > 0) e.preventDefault(); });
     canvas.addEventListener('pointermove', (e) => {
       if (!drag) return;
       if (Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) > 3) moved = true;
+      /* rotating is not panning: the drag maps to the two angles and the view is left
+         exactly where it was, so letting go of shift puts the reader back on the same
+         patch of graph rather than somewhere the rotation carried them. */
+      if (drag.rot) {
+        pitch = Math.max(0, Math.min(1.15, drag.p + (drag.y - e.clientY) * .006));
+        yaw = Math.max(-.5, Math.min(.5, drag.w + (e.clientX - drag.x) * .004));
+        refresh(); apply(); markTilt();
+        return;
+      }
       view.x = drag.vx - (e.clientX - drag.x) / view.k;
       view.y = drag.vy - (e.clientY - drag.y) / view.k;
       apply();
@@ -514,7 +843,43 @@
     const zoom = (f) => { view.k = Math.min(2.4, Math.max(.28, view.k * f)); apply(); };
     $('zin').addEventListener('click', () => zoom(1.2));
     $('zout').addEventListener('click', () => zoom(1 / 1.2));
-    $('zfit').addEventListener('click', () => { view = fit(); apply(); });
+    $('zfit').addEventListener('click', () => {
+      pitch = 0; yaw = 0; refresh(); view = fit(); apply(); markTilt();
+    });
+
+    /* ───────── the tilt (ADR 0061) ─────────
+       One button and one gesture, and neither is mounted when the page has nothing above
+       level 0. The button tweens between the flat view and a preset angle, which is the
+       whole interaction for a reader who wants to see what abstracts what; shift-drag
+       (or right-drag) gives the two angles directly, clamped so the picture can never be
+       turned into one the layout was not drawn for. The way back is the same ◎ that
+       resets the zoom, so a reader who gets lost has one thing to find, not two. */
+    const TILT = .72, YAW0 = .30;                  // the preset: planes well parted
+    function markTilt() {
+      const b = $('ztilt');
+      if (b) b.classList.toggle('on', sep() > .02);
+    }
+    let tween = null;
+    function tiltTo(p, y) {
+      if (tween) cancelAnimationFrame(tween);
+      const p0 = pitch, y0 = yaw, t0 = performance.now(), D = 420;
+      const step = (t) => {
+        const u = Math.min(1, (t - t0) / D);
+        const e = u < .5 ? 2 * u * u : 1 - 2 * (1 - u) * (1 - u);
+        pitch = p0 + (p - p0) * e; yaw = y0 + (y - y0) * e;
+        refresh(); apply(); markTilt();
+        tween = u < 1 ? requestAnimationFrame(step) : null;
+      };
+      tween = requestAnimationFrame(step);
+    }
+    if (ZMAX > 0) {
+      $('ztilt').addEventListener('click',
+        () => (sep() > .02 ? tiltTo(0, 0) : tiltTo(TILT, YAW0)));
+      markTilt();
+    } else {
+      $('ztilt').remove();
+      const zh = $('zhint'); if (zh) zh.remove();   // never advertise a control this page lacks
+    }
     addEventListener('keydown', (e) => {
       if (e.key === 'Escape') return close();
       const step = 80 / view.k;
@@ -526,16 +891,19 @@
     });
     addEventListener('resize', apply);
     document.body.classList.toggle('nopanel', collapsed);
+    sized = true;
     const wanted = hash.get();          // read it first: close() clears the address
     close();
+    drawRings();
     refresh();
     view = fit();
     apply();
     /* the address bar wins; then a focused page opens its node — quietly, so an
        embed keeps its panel tucked away until the reader asks */
-    const start = (wanted && (N[wanted] || wanted === SID)) ? wanted
+    const start = (wanted && (N[wanted] || isQ(wanted))) ? wanted
                 : (DATA.focus && N[DATA.focus]) ? DATA.focus : null;
     if (start) open(start, true);
+    markPills();
   }
 
   root.DAG = {mount: mount};

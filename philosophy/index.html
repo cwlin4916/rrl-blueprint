@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Understanding collaboration, with humans and AI</title>
+<link rel="stylesheet" href="../vendor/katex.min.css">
+<link rel="stylesheet" href="assets/deck.css">
+</head>
+<body>
+
+<div id="prog"></div>
+
+<nav id="nav">
+  <a class="home" href="index.html">The blueprint · contents</a>
+  <ol>
+    <li><a href="#collab">Understanding collaboration</a></li>
+    <li><a href="#kinds">Problem and programme</a></li>
+    <li><a href="#design">Designing this system</a></li>
+    <li><a href="#system">The system</a></li>
+    <li><a href="#open">Open questions</a></li>
+  </ol>
+  <div class="navfoot">
+    <a href="../dag.html">← the DAG</a><br>
+    <a href="../todo1.html">what we are asking you</a><br>
+    <span style="opacity:.7">t · toggle theme</span>
+  </div>
+</nav>
+
+<div id="chrome"><button class="btn" id="theme" title="Light / dark (t)">◐</button></div>
+
+<main>
+
+<!-- ══ 1 · understanding collaboration ═══════════════════════════════════ -->
+<section id="collab">
+  <div class="wrap">
+    <div class="kicker">Working note · August 2026</div>
+    <h1>Understanding collaboration, with humans and AI.</h1>
+    <p class="lede">Few mathematicians and a set of agents on one conjecture,
+      in a repository that keeps every statement, every referee report and every
+      revision as files.</p>
+    <div class="rule"></div>
+
+
+    <h3 class="sub" id="q1"><span class="q">1</span>How should the practice of
+      mathematics change, now that AI is in it?</h3>
+    <ul class="beats">
+      <li><b>How should we collaborate?</b> Who states, who proves, who judges,
+        and which of those a machine may hold.</li>
+      <li><b>What questions should we work on?</b> A machine that answers
+        cheaply changes which questions are worth asking. Why should we use or not use LEAN? </li>
+      <li><b>What skills should we develop?</b>  </li>
+    </ul>
+
+    <h3 class="sub" id="q2"><span class="q">2</span>How do we learn the intuition
+      behind human knowledge?</h3>
+    <p>A finished proof records the result and discards the thinking. We want to
+      know whether <b>provenance</b> can carry the thinking instead: which
+      statement moved, on whose objection, and what the author believed before
+      and after.</p>
+
+
+  </div>
+</section>
+
+<!-- ══ 2 · problem and programme ═════════════════════════════════════════ -->
+<section id="kinds">
+  <div class="wrap">
+    <div class="kicker">Problem and programme</div>
+    <h2>Four kinds of question, and only the innermost has a method.</h2>
+
+
+    <figure>
+      <img src="figures/four-problems.gif" data-replay
+           alt="Four concentric boxes: Exercise inside Problem inside Conjecture inside Research programme, each ring adding one more thing that is open to revision.">
+      <figcaption>Inward, more is fixed; outward, more is up for revision.</figcaption>
+    </figure>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>Kind</th><th>What is fixed</th><th>What is open</th></tr></thead>
+        <tbody>
+          <tr><td class="hi">Exercise</td><td>goal, route, language, standard</td><td>execution alone</td></tr>
+          <tr><td class="hi">Problem</td><td>goal, language, standard</td><td>the route</td></tr>
+          <tr><td class="hi">Conjecture</td><td>language, standard</td><td>the route, and whether the conclusion is even true</td></tr>
+          <tr><td class="hi">Research programme</td><td><span class="tag no">nothing</span></td><td>objects, correspondences, and what would count as success</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">The distinction is Simon's — for an ill-structured problem the
+      problem space is constructed while it is searched — and Rittel and Webber's,
+      for whom the formulation of a wicked problem <i>is</i> the problem. Both are
+      in the reading list beside the questions we are asking you.</p>
+  </div>
+</section>
+
+<!-- ══ 3 · designing this system ═════════════════════════════════════════ -->
+<section id="design">
+  <div class="wrap">
+    <div class="kicker">Designing this system</div>
+    <h2>Design for the practice, not for the solver.</h2>
+    <p style="margin-bottom:22px">A system built around one person finishing one
+      problem cannot hold the thing we want to study, which is what several
+      people and several agents do to a problem between them.</p>
+
+    <figure>
+      <img src="figures/p-chain.gif" data-replay
+           alt="P_0 arrow P_1 arrow P_2 arrow ellipsis, each arrow labelled with the one thing that changed between the two presentations.">
+      <figcaption>Each $P_i$ is a different account of what the problem is, and
+        each arrow is one thing somebody changed to get to the next.</figcaption>
+    </figure>
+
+    <p style="margin-top:30px">Three lineages stand behind that picture. Pólya's
+      four steps are the oldest written answer to <i>how is a problem solved</i>,
+      addressed to one student. Newell and Simon separate the task environment
+      from the solver's representation of it, which is what makes the chain
+      $P_0 \to P_1 \to P_2$ a thing you can point at. The Logic Theorist is the
+      first program to run on that distinction: three operators, a subproblem
+      list, and heuristics that cut the search.</p>
+  </div>
+</section>
+
+<!-- ══ 4 · the system ════════════════════════════════════════════════════ -->
+<section id="system">
+  <div class="wrap">
+    <div class="kicker">The system</div>
+    <h2>Nine objects, and the repository is all of the state.</h2>
+    <p style="margin-bottom:22px">Each one has a page saying what it is, what it
+      prevents, and where it comes from.</p>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>Object</th><th>What it is</th></tr></thead>
+        <tbody>
+          <tr><td class="hi"><a href="../concepts/node/index.html">node</a></td><td>one claim, one directory, and the id is the path</td></tr>
+          <tr><td class="hi"><a href="../concepts/dag/index.html">DAG</a></td><td>which claim rests on which</td></tr>
+          <tr><td class="hi"><a href="../concepts/appendix/index.html">appendix</a></td><td>every object a proof may invoke, one file each</td></tr>
+          <tr><td class="hi"><a href="../concepts/closed-world/index.html">closed world</a></td><td>the appendix, the node's own prerequisites, and nothing else</td></tr>
+          <tr><td class="hi"><a href="../concepts/operator/index.html">operator</a></td><td>the nine commands that may change the tree</td></tr>
+          <tr><td class="hi"><a href="../concepts/role/index.html">role</a></td><td>whether a node carries the argument or corroborates it</td></tr>
+          <tr><td class="hi"><a href="../concepts/gate/index.html">gate</a></td><td>the checks a run has to pass before it counts</td></tr>
+          <tr><td class="hi"><a href="../concepts/history/index.html">history</a></td><td>every dated entry in a node's life, append-only</td></tr>
+          <tr><td class="hi"><a href="../concepts/confidence/index.html">confidence</a></td><td>four signed channels, derived at build time, citable by nobody</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <figure style="margin-top:34px">
+      <img src="figures/collaboration.gif"
+           alt="Two human blobs and one system blob, each breathing and throwing occasional spikes, joined by dashed channels whose dashes march toward an arrowhead at the far end and thicken with how much is being written; the system blob grows while the two human blobs stay the same size.">
+      <figcaption>Dashes march toward the target and an arrowhead sits at it, so
+        each channel says its direction twice — animation and arrowheads each
+        tested best in their own study (Holten and van&nbsp;Wijk 2009; Jenny
+        <i>et al.</i> 2017). Dash size is volume, and only the record
+        accumulates.</figcaption>
+    </figure>
+
+    <figure style="margin-top:30px">
+      <img src="figures/tree.gif" data-replay
+           alt="Four trees of nodes growing downward as the argument, with lighter yellow abstraction nodes lifting up and to the right, blue arcs joining the question roots to each other, node fill moving between green and red, the camera pulling back as each new question opens, and a panel listing the operations as they happen.">
+      <figcaption>A question opens every four seconds and the camera pulls back
+        every two, so several trees stay in one frame. The blue arcs are feeds,
+        root to root: a node of one question never depends on a node of another.
+        No node ever moves once placed (Misue <i>et al.</i> 1995), and fill is
+        posterior belief.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ══ 5 · open questions ════════════════════════════════════════════════ -->
+<section id="open">
+  <div class="wrap">
+    <div class="kicker">Open questions</div>
+    <h2>What we do not know about our own machine.</h2>
+    <ul class="beats">
+      <li><b>How do we make any of this interpretable?</b> The record answers
+        what happened to a node and never why the node is there. The operator
+        aimed at it is <code>/why</code>, capped at 300 words and required to
+        answer with a pointer.</li>
+    </ul>
+
+    <div class="rule" style="margin-top:34px"></div>
+    <p class="note">What we are asking you to read and write back is
+      <a href="../todo1.html">to&nbsp;do</a>, three questions
+      at twenty minutes each, with a reading list behind two of them; the open
+      operator is
+      <a href="../todo2.html">todo&nbsp;2</a>. Every number on
+      this page was counted on 2026-08-08 from <code>tools/stats.py</code> and
+      from the files on disk. When they matter again, re-count rather than
+      patch.</p>
+  </div>
+</section>
+
+</main>
+
+<div class="pager">
+  <a href="../todo1.html" data-rel="next" style="margin-left:auto">
+    <span class="dir">Next</span>
+    <span class="ttl">What we are asking you →</span>
+  </a>
+</div>
+
+<script src="../vendor/katex.min.js"></script>
+<script src="assets/deck.js"></script>
+</body></html>
