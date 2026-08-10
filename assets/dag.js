@@ -898,8 +898,9 @@
     refresh();
     view = fit();
     apply();
-    /* the address bar wins; then a focused page opens its node — quietly, so an
-       embed keeps its panel tucked away until the reader asks */
+    /* the address bar wins; then a focused page opens its node — quietly, so a reader
+       who has collapsed the panel keeps it collapsed as they click through (ADR 0095:
+       the page a card leads to is this one, and the panel is open unless they said not) */
     const start = (wanted && (N[wanted] || isQ(wanted))) ? wanted
                 : (DATA.focus && N[DATA.focus]) ? DATA.focus : null;
     if (start) open(start, true);

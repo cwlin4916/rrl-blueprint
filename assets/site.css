@@ -228,11 +228,14 @@ details.why > summary:hover { color:var(--accent); }
 .whybody > :first-child { margin-top:.7rem; }
 .whyfoot { padding:.1rem .95rem .7rem; font-size:.72rem; color:var(--faint); }
 
-.dagembed { margin:1.1rem 0 1.8rem; }
-.dagembed iframe { display:block; width:100%; height:480px; border:1px solid var(--line);
-  border-radius:var(--r); background:var(--bg); }
-.dagembed figcaption { font-size:.76rem; color:var(--faint); margin-top:.45rem;
-  text-align:center; }
+/* The door back to the interface (ADR 0095). What sat here was a 480px `<iframe>` of the
+   graph, which made a node's document a page *about* the interface instead of a page
+   inside it; the graph is `index.html` beside this file, full height, with this node
+   already open in its panel. */
+.backtodag { margin:1.1rem 0 1.8rem; padding:.6rem .8rem; font-size:.8rem;
+  color:var(--faint); border:1px solid var(--line); border-radius:var(--r);
+  background:var(--bg); }
+.backtodag a { font-weight:600; }
 body.graph.embedded .bar { display:none; }
 body.graph.embedded #stage { height:100vh; }
 
